@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Grade Finder</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f5f1;--card:#fff;--tx:#1c1b19;--mu:#6b6860;--bd:#dedbd2;--ac:#2f5d50;--acx:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161715;--card:#1f211e;--tx:#ecebe6;--mu:#9a978e;--bd:#33362f;--ac:#7fc4ae;--acx:#10211b}}
+:root[data-theme="dark"]{--bg:#161715;--card:#1f211e;--tx:#ecebe6;--mu:#9a978e;--bd:#33362f;--ac:#7fc4ae;--acx:#10211b}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*:before,*:after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:760px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:22px;margin:0 0 4px}p.s{color:var(--mu);margin:0 0 16px}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:14px}
+label{display:block;font-weight:600;font-size:13px;margin:0 0 4px}
+textarea,input[type=number],input[type=text]{width:100%;font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:8px}
+textarea{min-height:120px;resize:vertical}
+.r{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:12px}
+.h{font-size:12px;color:var(--mu);margin-top:4px}
+button{margin-top:14px;background:var(--ac);color:var(--acx);border:0;border-radius:8px;padding:10px 18px;font:inherit;font-weight:600;cursor:pointer}
+.big{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.g{font-size:56px;font-weight:700;line-height:1;color:var(--ac)}
+.st{display:flex;gap:20px;flex-wrap:wrap}.st div b{display:block;font-size:18px}.st span{font-size:12px;color:var(--mu)}
+.w{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd)}th{color:var(--mu);font-size:12px}
+tr.me td{font-weight:700;color:var(--ac)}.err{color:#b3261e}
+summary{cursor:pointer;font-weight:600;font-size:13px}
+</style></head><body><main>
+<h1>Grade Finder</h1>
+<p class="s">Paste the LMS gradebook for the whole batch, pick your name, get your relative grade.</p>
+<div class="c">
+<label for="b">LMS text (all students)</label>
+<textarea id="b" placeholder="Paste the full copied LMS page. Each student's block starting with their name and 'Grade item' is read automatically."></textarea>
+<div class="h" id="info">Ranking uses each student's Course total as a percentage, so students graded out of 50 and 60 are compared fairly.</div>
+<div class="r">
+<div><label for="q">Your name</label><input type="text" id="q" list="dl" placeholder="Start typing, pick from list"><datalist id="dl"></datalist></div>
+<div><label for="f">Fail below (% , 0 = off)</label><input type="number" id="f" value="0" min="0" max="100" step="any"></div>
+<div id="fb" style="display:none"><label for="mx">Max marks (plain list mode)</label><input type="number" id="mx" value="60" min="1"></div>
+</div>
+<button id="go">Find my grade</button>
+</div>
+<div id="out"></div>
+<script>
+const G=[["O",10,.03],["A+",9,.15],["A",8,.36],["B+",7,.64],["B",6,.85],["C",5,.97],["P",4,1.01]];
+const $=id=>document.getElementById(id);
+const K=p=>Math.round(p*100);
+function parse(t){const out=[],bad=[],parts=t.split(/Grade item/);
+if(parts.length>1){for(let i=1;i<parts.length;i++){
+const pl=parts[i-1].split(/\n/).map(x=>x.trim()).filter(Boolean);
+const name=pl.length?pl[pl.length-1]:"Student "+i;
+const m=parts[i].match(/Course total[\s-]*?(\d+(?:\.\d+)?)\s*0\s*[–-]\s*(\d+)/);
+if(m&&+m[2]>0)out.push({n:name,m:+m[1],x:+m[2],p:+m[1]/+m[2]*100});else bad.push(name)}}
+else{const mx=+$("mx").value||60;t.split(/\n/).forEach((l,i)=>{const k=l.match(/\d+(?:\.\d+)?/g);if(!k)return;
+const v=+k[k.length-1];const n=l.replace(/[\d.\s\t,]+$/,"").trim()||"Student "+(i+1);
+out.push({n,m:v,x:mx,p:v/mx*100})})}
+return{out,bad,plain:parts.length<2&&t.trim().length>0}}
+function refresh(){const r=parse($("b").value);
+$("dl").innerHTML=r.out.map(s=>`<option value="${s.n.replace(/"/g,"&quot;")}">`).join("");
+$("fb").style.display=r.plain?"block":"none";
+if(r.out.length)$("info").textContent=`Read ${r.out.length} students`+(r.bad.length?`; no marks for: ${r.bad.join(", ")} (excluded)`:"")+".";
+return r}
+function grade(p,ks,fm){if(p<fm)return["F",0];const r=ks.filter(k=>k>K(p)).length/ks.length;
+for(const g of G)if(r<g[2])return[g[0],g[1]]}
+function run(){const o=$("out"),r=refresh(),all=r.out;
+if(all.length<2){o.innerHTML='<div class="c err">Paste the batch LMS text first.</div>';return}
+const q=$("q").value.trim().toLowerCase();
+let me=all.find(s=>s.n.toLowerCase()===q);
+if(!me){const c=all.filter(s=>s.n.toLowerCase().includes(q));if(q&&c.length===1)me=c[0];
+else{o.innerHTML='<div class="c err">'+(q&&c.length>1?"Several names match, type more of yours: "+c.map(s=>s.n).join(", "):"Enter your name exactly as in the list.")+'</div>';return}}
+const fm=+$("f").value||0,ks=all.map(s=>K(s.p)),N=all.length;
+const [gl,gp]=grade(me.p,ks,fm);
+const above=ks.filter(k=>k>K(me.p)).length;
+const avg=all.reduce((a,s)=>a+s.p,0)/N;
+const gs=all.map(s=>({...s,g:grade(s.p,ks,fm)})).sort((a,b)=>b.p-a.p);
+const names=[...G.map(g=>g[0]),"F"];
+const rows=names.map(n=>{const m=gs.filter(s=>s.g[0]===n);
+return `<tr class="${n===gl?'me':''}"><td>${n}</td><td>${n==="F"?0:G.find(g=>g[0]===n)[1]}</td><td>${m.length}</td><td>${m.length?Math.min(...m.map(s=>s.p)).toFixed(2)+"%":"-"}</td></tr>`}).join("");
+const list=gs.map((s,i)=>`<tr class="${s===gs.find(z=>z.n===me.n)?'me':''}"><td>${i+1}</td><td>${s.n}</td><td>${s.m}/${s.x}</td><td>${s.p.toFixed(2)}%</td><td>${s.g[0]}</td></tr>`).join("");
+o.innerHTML=`<div class="c"><div class="big"><div class="g">${gl}</div>
+<div class="st"><div><b>${gp}</b><span>Grade point</span></div><div><b>${above+1} / ${N}</b><span>Rank (ties share)</span></div><div><b>Top ${(above/N*100).toFixed(1)}%</b><span>${above} students above you</span></div><div><b>${me.p.toFixed(2)}%</b><span>${me.m}/${me.x}, batch avg ${avg.toFixed(1)}%</span></div></div></div></div>
+<div class="c w"><label>Grade cutoffs for this batch</label><table><tr><th>Grade</th><th>Points</th><th>Students</th><th>Lowest % getting it</th></tr>${rows}</table>
+<div class="h">Ties get the higher grade. Exact rounding at each boundary is assumed, so results near a cutoff are estimates.</div></div>
+<div class="c w"><details><summary>Full batch ranking</summary><table style="margin-top:8px"><tr><th>#</th><th>Name</th><th>Marks</th><th>%</th><th>Grade</th></tr>${list}</table></details></div>`}
+$("b").addEventListener("input",refresh);$("go").onclick=run;
+</script></main></body></html>
